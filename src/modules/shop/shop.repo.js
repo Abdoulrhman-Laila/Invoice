@@ -32,9 +32,55 @@ async function findById(id) {
   return res.rows[0] || null;
 }
 
+async function findPasswordRowById(id) {
+  const res = await pool.query(
+    `SELECT id, password FROM shop WHERE id = $1 LIMIT 1`,
+    [id]
+  );
+  return res.rows[0] || null;
+}
+
+async function updateById(id, patch) {
+  const fields = [];
+  const values = [];
+  let i = 1;
+
+  if (patch.name !== undefined) {
+    fields.push(`name = $${i++}`);
+    values.push(patch.name);
+  }
+  if (patch.phone !== undefined) {
+    fields.push(`phone = $${i++}`);
+    values.push(patch.phone);
+  }
+
+  if (fields.length === 0) {
+    return await findById(id);
+  }
+
+  values.push(id);
+  const res = await pool.query(
+    `UPDATE shop SET ${fields.join(", ")}
+     WHERE id = $${i}
+     RETURNING id, name, email, phone, created_at`,
+    values
+  );
+  return res.rows[0] || null;
+}
+
+async function updatePasswordById(id, passwordHash) {
+  await pool.query(`UPDATE shop SET password = $1 WHERE id = $2`, [
+    passwordHash,
+    id,
+  ]);
+}
+
 module.exports = {
   findByEmail,
   create,
   findById,
+  findPasswordRowById,
+  updateById,
+  updatePasswordById,
 };
 
