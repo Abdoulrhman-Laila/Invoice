@@ -86,6 +86,38 @@ async function downloadPdf(req, res, next) {
     );
     res.send(result.buffer);
   } catch (err) {
+    if (err && err.code === "MODULE_NOT_FOUND") {
+      return res.status(503).json({
+        message:
+          "تعذر تحميل مكتبة PDF. نفّذ npm install في جذر المشروع ثم أعد تشغيل السيرفر.",
+        code: "PDF_MODULE_MISSING",
+      });
+    }
+    if (err && typeof err.code === "string" && err.code.startsWith("PDF_")) {
+      const status = Number(err.statusCode) || 502;
+      const body = {
+        message: err.message,
+        code: err.code,
+      };
+      if (err.hint) {
+        body.hint = err.hint;
+      }
+      return res.status(status).json(body);
+    }
+    const msg = String(err && err.message ? err.message : "");
+    if (
+      msg.includes("Browser") ||
+      msg.includes("Executable") ||
+      msg.includes("Chromium") ||
+      msg.includes("Failed to launch") ||
+      msg.includes("لم يُعثر على Chrome")
+    ) {
+      return res.status(503).json({
+        message: msg,
+        code: "PDF_BROWSER_LEGACY",
+        hint: "عيّن PUPPETEER_EXECUTABLE_PATH لمسار chrome.exe أو msedge.exe",
+      });
+    }
     return next(err);
   }
 }

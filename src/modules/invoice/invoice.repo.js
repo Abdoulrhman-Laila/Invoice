@@ -10,10 +10,18 @@ async function findCustomerInShop({ shopId, customerId }) {
 
 async function list({ shopId, limit, offset }) {
   const res = await pool.query(
-    `SELECT id, shop_id, customer_id, invoice_number, total_amount, status, created_at
-     FROM invoice
-     WHERE shop_id = $1
-     ORDER BY id DESC
+    `SELECT i.id,
+            i.shop_id,
+            i.customer_id,
+            i.invoice_number,
+            i.total_amount,
+            i.status,
+            i.created_at,
+            c.name AS customer_name
+     FROM invoice i
+     LEFT JOIN customer c ON c.id = i.customer_id AND c.shop_id = i.shop_id
+     WHERE i.shop_id = $1
+     ORDER BY i.id DESC
      LIMIT $2 OFFSET $3`,
     [shopId, limit, offset]
   );
@@ -22,9 +30,17 @@ async function list({ shopId, limit, offset }) {
 
 async function findByIdForShop({ shopId, id }) {
   const res = await pool.query(
-    `SELECT id, shop_id, customer_id, invoice_number, total_amount, status, created_at
-     FROM invoice
-     WHERE shop_id = $1 AND id = $2
+    `SELECT i.id,
+            i.shop_id,
+            i.customer_id,
+            i.invoice_number,
+            i.total_amount,
+            i.status,
+            i.created_at,
+            c.name AS customer_name
+     FROM invoice i
+     LEFT JOIN customer c ON c.id = i.customer_id AND c.shop_id = i.shop_id
+     WHERE i.shop_id = $1 AND i.id = $2
      LIMIT 1`,
     [shopId, id]
   );

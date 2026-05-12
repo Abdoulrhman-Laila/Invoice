@@ -135,7 +135,17 @@ async function createInvoice({ shopId, customerId, items }) {
     await client.query("COMMIT");
 
     const itemsOut = await repo.findItemsWithProduct({ invoiceId });
-    return { invoice, items: itemsOut };
+    const customerRow = await repo.findCustomerForShopById({
+      shopId,
+      customerId,
+    });
+    return {
+      invoice: {
+        ...invoice,
+        customer_name: customerRow ? customerRow.name : null,
+      },
+      items: itemsOut,
+    };
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;

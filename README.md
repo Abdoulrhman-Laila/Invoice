@@ -15,7 +15,7 @@
 
 ## 📌 نظرة عامة
 
-**Back-End Invoice** هو خادم REST مبني على **Express** يوفّر نظام فواتير **متعدد المستأجرين (Multi-tenant)**؛ كل **متجر (Shop)** مسجّل بحساب خاص، والبيانات مرتبطة بالمتجر المُصادَق عليه عبر **JWT**. يدعم إدارة **العملاء** و**المنتجات** و**الفواتير** مع **دفعات**، **تقارير مبيعات**، وتصدير **فواتير PDF** (بما في ذلك دعم **تشكيل النص العربي** عبر `arabic-reshaper` و`pdfkit`).
+**Back-End Invoice** هو خادم REST مبني على **Express** يوفّر نظام فواتير **متعدد المستأجرين (Multi-tenant)**؛ كل **متجر (Shop)** مسجّل بحساب خاص، والبيانات مرتبطة بالمتجر المُصادَق عليه عبر **JWT**. يدعم إدارة **العملاء** و**المنتجات** و**الفواتير** مع **دفعات**، **تقارير مبيعات**، **ملف المتجر**، وتصدير **فواتير PDF** عبر **HTML + Chromium** (`puppeteer-core`) مع **العربية واتجاه RTL** (`lang="ar"`, `dir="rtl"` وخطوط عربية).
 
 ---
 
@@ -26,9 +26,10 @@
 | 🔐 **المصادقة** | تسجيل متجر، تسجيل دخول، حماية المسارات بـ Bearer Token |
 | 👥 **العملاء** | CRUD كامل للعملاء ضمن نطاق المتجر |
 | 📦 **المنتجات** | CRUD كامل للمنتجات |
-| 🧾 **الفواتير** | إنشاء وعرض وقائمة فواتير + **تنزيل PDF** |
+| 🧾 **الفواتير** | إنشاء وعرض وقائمة فواتير + **تنزيل PDF** (Chrome/Edge على السيرفر) |
 | 💰 **الدفعات** | ربط دفعات بالفواتير |
 | 📊 **التقارير** | تقرير مبيعات (مثال: `/api/reports/sales`) |
+| 🏪 **المتجر** | ملف المتجر وكلمة المرور (محمي) |
 | 🏥 **الصحة** | مسار `GET /api/health` للتحقق من عمل الخادم |
 
 ---
@@ -39,7 +40,7 @@
 - **Framework:** Express 5
 - **قاعدة البيانات:** PostgreSQL (`pg`)
 - **الأمان:** `bcrypt`, `jsonwebtoken`, `cors`
-- **PDF:** `pdfkit` + `arabic-reshaper`
+- **PDF:** `puppeteer-core` + **Chrome أو Edge** مثبت على الجهاز (HTML → PDF، عربي RTL)
 - **البيئة:** `dotenv` مع تحميل ذكي لملف `.env` من جذر المشروع
 
 ---
@@ -48,6 +49,7 @@
 
 - [Node.js](https://nodejs.org/) (يُنصح بإصدار LTS)
 - [PostgreSQL](https://www.postgresql.org/) قيد التشغيل وقاعدة بيانات مُنشأة
+- لتصدير PDF: **Google Chrome** أو **Microsoft Edge** مثبت على نفس الجهاز الذي يشغّل الخادم، أو تعيين **`PUPPETEER_EXECUTABLE_PATH`** لمسار التنفيذ
 - (اختياري) [nodemon](https://www.npmjs.com/package/nodemon) للتطوير — مُضمّن كـ devDependency
 
 ---
@@ -109,6 +111,10 @@ npm run dev
 | `JWT_SECRET` | مفتاح توقيع التوكن (إلزامي) |
 | `JWT_EXPIRES_IN` | مدة صلاحية التوكن (مثل `7d`) |
 | `BCRYPT_SALT_ROUNDS` | جولات bcrypt |
+| `PUPPETEER_EXECUTABLE_PATH` | (اختياري) مسار `chrome.exe` أو `msedge.exe` إن لم يُكتشف تلقائياً |
+| `PDF_MAX_CONCURRENT` | (اختياري) أقصى عدد طلبات PDF متزامنة (افتراضي: `4`) |
+| `PDF_OPERATION_TIMEOUT_MS` | (اختياري) مهلة توليد PDF بالمللي ثانية (افتراضي: `45000`) |
+| `PDF_USE_REMOTE_FONTS` | (اختياري) `false` على سيرفر بدون إنترنت؛ يعتمد على خطوط النظام (يفضّل تثبيت خطوط عربية مثل Noto على Linux) |
 
 التفاصيل الكاملة في [`.env.example`](.env.example).
 
@@ -120,15 +126,24 @@ npm run dev
 
 | المسار | الوصف |
 |--------|--------|
-| `GET /health` | فحص الصحة |
-| `POST /auth/register` | تسجيل متجر جديد |
-| `POST /auth/login` | تسجيل دخول وإصدار JWT |
-| `/customers` | العملاء (محمي) |
-| `/products` | المنتجات (محمي) |
-| `/invoices` | الفواتير + دفعات + `GET .../pdf` (محمي) |
-| `/reports` | التقارير (محمي) |
+| `GET /api/health` | فحص الصحة |
+| `POST /api/auth/register` | تسجيل متجر جديد |
+| `POST /api/auth/login` | تسجيل دخول وإصدار JWT |
+| `/api/shop/me`، `PATCH /api/shop/me`، `PATCH /api/shop/me/password` | ملف المتجر وكلمة المرور (محمي) |
+| `/api/customers` | العملاء (محمي) |
+| `/api/products` | المنتجات (محمي) |
+| `/api/invoices` | الفواتير (محمي) |
+| `GET /api/invoices/:id/pdf` | تنزيل فاتورة بصيغة PDF (محمي، `Content-Disposition: attachment`) |
+| `POST/GET /api/invoices/:id/payments` | دفعات الفاتورة (محمي) |
+| `/api/reports` | التقارير (محمي) |
 
 > المسارات المحمية تتوقع رأسًا: `Authorization: Bearer <token>`.
+
+### تصدير PDF
+
+- **لا يُحمّل Chromium** مع `npm install`؛ يُستخدم **`puppeteer-core`** مع متصفح النظام لتفادي فشل التحميل على شبكات ضعيفة أو بيئات مقيّدة.
+- عند الفشل قد يعيد الخادم JSON يحتوي على **`code`** يبدأ بـ `PDF_` (مثل `PDF_BROWSER_UNAVAILABLE`, `PDF_RENDER_FAILED`) مع **`message`** و **`hint`** عند الحاجة.
+- عند الإيقاف (`SIGTERM` / `SIGINT`) يُغلق متصفح PDF مع الخادم لتفادي عمليات معلّقة.
 
 ---
 
@@ -143,7 +158,7 @@ BackEndInvoice/
 │   ├── routes/            # مسارات API
 │   ├── controllers/
 │   ├── middleware/
-│   ├── modules/           # منطق الأعمال (مثل auth، shop)
+│   ├── modules/           # منطق الأعمال (auth، shop، invoice، …) + خدمة PDF
 │   └── db/                # ترحيلات قاعدة البيانات
 ├── package.json
 ├── .env.example
